@@ -280,7 +280,7 @@
 
     const icon = document.createElement("div"); icon.className = "icon";
     const img = new Image(28, 28); img.alt = "";
-    img.src = "https://www.google.com/s2/favicons?sz=64&domain=" + encodeURIComponent(host(s.url));
+    img.src = "chrome://favicon2/?size=64&scaleFactor=1x&showFallbackMonogram=&pageUrl=" + encodeURIComponent(host(s.url));
     img.onerror = () => { icon.textContent = s.name[0].toUpperCase(); };
     icon.append(img);
 
