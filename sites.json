@@ -8,5 +8,10 @@
     "name": "SKYWARD",
     "url": "https://aerospace-app.vercel.app/",
     "desc": ""
+  },
+  {
+    "name": "Cube Utils",
+    "url": "https://my-cube-utils.vercel.app/",
+    "desc": ""
   }
 ]
