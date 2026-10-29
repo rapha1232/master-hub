@@ -3,5 +3,10 @@
     "name": "Omnix",
     "url": "https://omnix-dash.vercel.app/",
     "desc": ""
+  },
+  {
+    "name": "SKYWARD",
+    "url": "https://aerospace-app.vercel.app/",
+    "desc": ""
   }
 ]
