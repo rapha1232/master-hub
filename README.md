@@ -10,9 +10,12 @@ Open `index.html` (or host the folder anywhere: GitHub Pages, Netlify, Vercel…
 - **Edit / remove:** click **Edit** at the bottom, then use ✎ or ✕ on a card.
 - **Search:** press `/`, type, hit `Enter` to open the first match.
 
-## Where your list is stored
+## Sync across browsers
 
-Your list is saved in the browser you add sites from. To use it on another device:
+The list is stored in `sites.json` in this repo, so every browser shows the same sites.
 
-1. **Export** on one device (downloads `sites.json`).
-2. **Import** on the other, or commit that file next to `index.html` — a fresh browser loads it automatically as the starting list.
+- **Viewing** needs nothing.
+- **Adding/editing** from a browser: tap **Sync** once and paste a GitHub fine-grained token
+  (only this repo, *Contents: Read and write*). Changes are committed to `main` automatically.
+
+To host it, enable GitHub Pages: repo **Settings → Pages → Deploy from branch → `main` / root**.

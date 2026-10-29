@@ -151,10 +151,12 @@
 
   <footer>
     <button class="btn" id="edit">Edit</button>
+    <button class="btn" id="sync">Sync</button>
     <button class="btn" id="export">Export</button>
     <button class="btn" id="import">Import</button>
     <input type="file" id="file" accept="application/json,.json" hidden>
-    <p class="hint">Press <kbd>/</kbd> to search, <kbd>Enter</kbd> to open the first match. Sites are saved in this browser — use Export/Import to move them to another device.</p>
+    <p class="hint" id="status"></p>
+    <p class="hint">Press <kbd>/</kbd> to search, <kbd>Enter</kbd> to open the first match.</p>
   </footer>
 </main>
 
@@ -171,6 +173,22 @@
     <div class="actions">
       <button type="button" class="btn" id="cancel">Cancel</button>
       <button type="submit" class="btn primary">Save site</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="syncDlg">
+  <form method="dialog" id="syncForm" novalidate>
+    <h2>Sync across browsers</h2>
+    <p class="sub" style="margin:0">Your list lives in <code>sites.json</code> in your GitHub repo, so every browser shows the same sites. Viewing needs nothing. To <em>add or edit</em> from this browser, paste a GitHub token once.</p>
+    <p class="sub"><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Create a token</a>: pick only the <b>master-hub</b> repo, permission <b>Contents → Read and write</b>.</p>
+    <label for="fToken">Token</label>
+    <input type="text" id="fToken" placeholder="github_pat_…" autocomplete="off" spellcheck="false">
+    <p class="error" id="syncErr" role="alert"></p>
+    <div class="actions">
+      <button type="button" class="btn danger" id="forget" hidden>Disconnect</button>
+      <button type="button" class="btn" id="syncCancel">Close</button>
+      <button type="submit" class="btn primary">Connect</button>
     </div>
   </form>
 </dialog>
@@ -194,22 +212,59 @@
     catch { return null; }
   };
 
-  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(sites)); } catch {} };
+  const REPO = "rapha1232/master-hub", BRANCH = "main", FILE = "sites.json";
+  const API = `https://api.github.com/repos/${REPO}/contents/${FILE}`;
+  const TOKEN_KEY = "master-hub:token";
+  const getToken = () => { try { return localStorage.getItem(TOKEN_KEY) || ""; } catch { return ""; } };
+  const hdrs = () => ({ Accept: "application/vnd.github+json", ...(getToken() && { Authorization: "Bearer " + getToken() }) });
+  const b64 = str => btoa(String.fromCharCode(...new TextEncoder().encode(str)));
+  const unb64 = b => new TextDecoder().decode(Uint8Array.from(atob(b.replace(/\n/g, "")), c => c.charCodeAt(0)));
+
+  const setStatus = t => { $("status").textContent = t; };
+  const cache = () => { try { localStorage.setItem(KEY, JSON.stringify(sites)); } catch {} };
   const clean = list => (Array.isArray(list) ? list : []).map(s => ({
     id: s.id || uid(), name: String(s.name || "").trim(), url: normUrl(String(s.url || "")),
     desc: String(s.desc || "").trim()
   })).filter(s => s.url).map(s => ({ ...s, name: s.name || host(s.url) }));
 
+  async function fetchRemote() {
+    const res = await fetch(`${API}?ref=${BRANCH}&t=${Date.now()}`, { headers: hdrs(), cache: "no-store" });
+    if (res.status === 404) return { list: [], sha: null };
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const j = await res.json();
+    return { list: clean(JSON.parse(unb64(j.content))), sha: j.sha };
+  }
+
+  let chain = Promise.resolve();
+  function save() {
+    cache();
+    if (!getToken()) { setStatus("Saved in this browser only. Tap Sync to share across browsers."); return; }
+    setStatus("Syncing…");
+    chain = chain.then(async () => {
+      try {
+        const { sha } = await fetchRemote();
+        const body = JSON.stringify(sites.map(({ name, url, desc }) => ({ name, url, desc })), null, 2) + "\n";
+        const res = await fetch(API, {
+          method: "PUT", headers: hdrs(),
+          body: JSON.stringify({ message: "Update sites", content: b64(body), branch: BRANCH, ...(sha && { sha }) })
+        });
+        if (!res.ok) throw new Error(res.status === 401 || res.status === 403 || res.status === 404 ? "token rejected" : "HTTP " + res.status);
+        setStatus("Synced ✓");
+      } catch (e) { setStatus("Sync failed (" + e.message + "). Changes are kept in this browser."); }
+    });
+    return chain;
+  }
+
   async function load() {
+    try { const raw = localStorage.getItem(KEY); if (raw) sites = clean(JSON.parse(raw)); } catch {}
+    render();
     try {
-      const raw = localStorage.getItem(KEY);
-      if (raw) { sites = clean(JSON.parse(raw)); return; }
-    } catch {}
-    // First visit: fall back to the sites.json that ships with the hub, if any.
-    try {
-      const res = await fetch("sites.json", { cache: "no-store" });
-      if (res.ok) { sites = clean(await res.json()); save(); }
-    } catch {}
+      const { list } = await fetchRemote();
+      if (list.length || !sites.length) { sites = list; cache(); }
+      else if (getToken()) save(); // remote empty, local has sites: publish them
+      setStatus(getToken() ? "Synced ✓" : "Viewing synced list. Tap Sync to enable editing here.");
+    } catch { setStatus("Offline or can't reach GitHub. Showing the last saved list."); }
+    render();
   }
 
   function toast(msg) {
@@ -333,7 +388,20 @@
     } catch { toast("That file isn't a valid sites.json"); }
   });
 
-  load().then(render);
+  const sd = $("syncDlg");
+  $("sync").onclick = () => { $("fToken").value = ""; $("syncErr").textContent = ""; $("forget").hidden = !getToken(); sd.showModal(); };
+  $("syncCancel").onclick = () => sd.close();
+  $("forget").onclick = () => { try { localStorage.removeItem(TOKEN_KEY); } catch {} sd.close(); setStatus("Disconnected. This browser can view but not edit the shared list."); };
+  $("syncForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const t = $("fToken").value.trim();
+    if (!t) { $("syncErr").textContent = "Paste your token first."; return; }
+    try { localStorage.setItem(TOKEN_KEY, t); } catch {}
+    try { await fetchRemote(); } catch { try { localStorage.removeItem(TOKEN_KEY); } catch {} $("syncErr").textContent = "GitHub rejected that token. Check it has access to the master-hub repo."; return; }
+    sd.close(); toast("Connected"); load();
+  });
+
+  load();
 })();
 </script>
 </body>
