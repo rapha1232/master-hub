@@ -280,8 +280,16 @@
 
     const icon = document.createElement("div"); icon.className = "icon";
     const img = new Image(28, 28); img.alt = "";
-    img.src = "chrome://favicon2/?size=64&scaleFactor=1x&showFallbackMonogram=&pageUrl=" + encodeURIComponent(host(s.url));
-    img.onerror = () => { icon.textContent = s.name[0].toUpperCase(); };
+    const h = host(s.url);
+    const srcs = [
+      "chrome://favicon2/?size=64&scaleFactor=1x&showFallbackMonogram=&pageUrl=" + encodeURIComponent(h),
+      "https://www.google.com/s2/favicons?sz=64&domain=" + encodeURIComponent(h),
+      "https://icons.duckduckgo.com/ip3/" + h + ".ico",
+      new URL("/favicon.ico", s.url).href
+    ];
+    let i = 0;
+    img.onerror = () => { if (++i < srcs.length) img.src = srcs[i]; else { img.remove(); icon.textContent = s.name[0].toUpperCase(); } };
+    img.src = srcs[0];
     icon.append(img);
 
     const meta = document.createElement("div"); meta.className = "meta";
