@@ -18,5 +18,10 @@
     "name": "API Search",
     "url": "https://crm-api-search.vercel.app/",
     "desc": ""
+  },
+  {
+    "name": "Recipe Grapher",
+    "url": "https://recipe-grapher.vercel.app/",
+    "desc": ""
   }
 ]
